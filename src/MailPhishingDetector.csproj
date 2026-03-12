@@ -2,10 +2,10 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>10</LangVersion>
+    <LangVersion>11</LangVersion>
     <AssemblyName>MailPhishingDetector</AssemblyName>
     <RootNamespace>MailPhishingDetector</RootNamespace>
   </PropertyGroup>

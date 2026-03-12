@@ -5,7 +5,8 @@ using System.Text.RegularExpressions;
 namespace MailPhishingDetector.Services;
 
 /// <summary>
-/// Parses a raw .eml file into a <see cref="ParsedEmail"/> ready for analysis.
+/// Parses a raw .eml file (or an in-memory <see cref="MimeMessage"/>) into a
+/// <see cref="ParsedEmail"/> ready for phishing analysis.
 /// </summary>
 public class EmlParserService
 {
@@ -14,17 +15,33 @@ public class EmlParserService
         @"https?://[^\s""'<>\)\]]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>Parses a .eml file from disk.</summary>
     public ParsedEmail Parse(string filePath)
     {
         using var stream = File.OpenRead(filePath);
         var message = MimeMessage.Load(stream);
+        return ParseMimeMessage(message, filePath);
+    }
 
+    /// <summary>
+    /// Parses an already-loaded <see cref="MimeMessage"/> — used by the IMAP fetch path
+    /// where there is no file on disk.
+    /// </summary>
+    public ParsedEmail ParseMessage(MimeMessage message, string filePath = "")
+        => ParseMimeMessage(message, filePath);
+
+    // ---------------------------------------------------------------
+    //  Core extraction — shared by both public methods
+    // ---------------------------------------------------------------
+
+    private static ParsedEmail ParseMimeMessage(MimeMessage message, string filePath)
+    {
         var toAddresses = message.To
             .Mailboxes
             .Select(m => m.Address)
             .ToList();
 
-        var replyTo = message.ReplyTo.Mailboxes.FirstOrDefault()?.Address ?? string.Empty;
+        var replyTo    = message.ReplyTo.Mailboxes.FirstOrDefault()?.Address ?? string.Empty;
         var returnPath = message.Headers[HeaderId.ReturnPath] ?? string.Empty;
 
         var plainText = message.GetTextBody(MimeKit.Text.TextFormat.Plain) ?? string.Empty;
@@ -37,7 +54,7 @@ public class EmlParserService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Attachment file names
+        // Attachment file names (binary parts only — MessageParts are handled separately)
         var attachments = message.Attachments
             .OfType<MimePart>()
             .Select(a => a.FileName ?? string.Empty)
@@ -54,23 +71,23 @@ public class EmlParserService
 
         return new ParsedEmail
         {
-            FilePath          = filePath,
-            MessageId         = message.MessageId ?? string.Empty,
-            Subject           = message.Subject   ?? string.Empty,
-            FromAddress       = from?.Address      ?? string.Empty,
-            FromDisplayName   = from?.Name         ?? string.Empty,
-            ReplyToAddress    = replyTo,
-            ReturnPath        = returnPath,
-            ToAddresses       = toAddresses,
-            ReceivedSpf       = message.Headers["Received-SPF"]          ?? string.Empty,
-            AuthResults       = message.Headers["Authentication-Results"] ?? string.Empty,
-            DkimSignature     = message.Headers["DKIM-Signature"]         ?? string.Empty,
-            PlainTextBody     = plainText,
-            HtmlBody          = htmlBody,
-            BodyUrls          = urls,
-            AttachmentNames   = attachments,
-            AllReceivedHeaders= received,
-            SentDate          = message.Date,
+            FilePath           = filePath,
+            MessageId          = message.MessageId ?? string.Empty,
+            Subject            = message.Subject   ?? string.Empty,
+            FromAddress        = from?.Address      ?? string.Empty,
+            FromDisplayName    = from?.Name         ?? string.Empty,
+            ReplyToAddress     = replyTo,
+            ReturnPath         = returnPath,
+            ToAddresses        = toAddresses,
+            ReceivedSpf        = message.Headers["Received-SPF"]          ?? string.Empty,
+            AuthResults        = message.Headers["Authentication-Results"] ?? string.Empty,
+            DkimSignature      = message.Headers["DKIM-Signature"]         ?? string.Empty,
+            PlainTextBody      = plainText,
+            HtmlBody           = htmlBody,
+            BodyUrls           = urls,
+            AttachmentNames    = attachments,
+            AllReceivedHeaders = received,
+            SentDate           = message.Date,
         };
     }
 }
